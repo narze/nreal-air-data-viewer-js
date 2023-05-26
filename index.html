@@ -8,6 +8,8 @@
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
 
     <script>
+      // const PI_2 = Math.PI / 2
+
       function setLatestReport(text) {
         document.getElementById("overlay-content").innerText = text
       }
@@ -131,9 +133,32 @@
             acceleration_z
           )
 
-          console.log(accelVector)
+          // console.log(accelVector)
+          const event = new CustomEvent("xreal-data", { detail: accelVector })
+
+          // Emit the event with data
+          window.dispatchEvent(event)
         })
       }
+
+      AFRAME.registerComponent("xreal-controls", {
+        dependencies: ["rotation"],
+        init: function () {
+          this.onXRealData = this.onXRealData
+          this.XRealData = { x: 0, y: 0, z: 0 }
+        },
+        update: function () {
+          window.addEventListener("xreal-data", this.onXRealData.bind(this))
+        },
+        onXRealData: function ({ detail }) {
+          this.XRealData = detail
+        },
+        tick: function () {
+          this.el.object3D.rotation.x = -this.XRealData.y
+          // this.el.object3D.rotation.y = this.XRealData.z // TODO
+          this.el.object3D.rotation.z = -this.XRealData.x
+        },
+      })
     </script>
     <style>
       #overlay {
@@ -149,7 +174,7 @@
       }
 
       #overlay-content {
-        background-color: rgba(255, 255, 255, 0.8);
+        background-color: rgba(255, 255, 255, 0.1);
         padding: 20px;
       }
     </style>
@@ -171,10 +196,17 @@
         height="4"
         color="#7BC8A4"
       ></a-plane>
-      <a-sky color="#ECECEC"></a-sky>
+      <!-- <a-sky color="#ECECEC"></a-sky> -->
+      <a-sky color="black"></a-sky>
 
-      <a-entity id="rig" position="0 1.6 0" rotation="-10 0 15">
-        <a-entity id="camera" camera look-controls wasd-controls></a-entity>
+      <a-entity id="rig" position="0 1.6 0" rotation="0 0 0">
+        <a-entity
+          id="camera"
+          camera
+          look-controls
+          wasd-controls
+          xreal-controls
+        ></a-entity>
         <!-- <a-entity camera="active: true" look-controls wasd-controls position="0 1.6 0" data-aframe-default-camera></a-entity> -->
       </a-entity>
     </a-scene>
