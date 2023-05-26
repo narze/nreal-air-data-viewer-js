@@ -4,10 +4,186 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React + TS</title>
+    <title>XReal + A-Frame</title>
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+
+    <script>
+      function setLatestReport(text) {
+        document.getElementById("overlay-content").innerText = text
+      }
+
+      function ready() {
+        window.setReportHandler((index, data) => {
+          void index
+          if (data.length !== 64) return
+          const lines = []
+          let offset = 0
+          const format = (data) => {
+            return Array.from(data)
+              .map((a) => `00${a.toString(16)}`.slice(-2))
+              .join(" ")
+          }
+          const extract = (length) => {
+            const slice = data.slice(offset, offset + length)
+            offset += length
+            return slice
+          }
+          const extractAndPrint = (text, length) => {
+            const slice = extract(length)
+            lines.push(text + ": " + format(slice))
+            return slice
+          }
+
+          extractAndPrint("signature", 2)
+          extractAndPrint("temperature", 2)
+          extractAndPrint("timestamp", 8)
+
+          const getVector = (multiplier, divisor, x, y, z) => {
+            const signed = (x) => (x & 0x80 ? x - 0x100 : x)
+            const m = signed(multiplier[1]) * 256 + signed(multiplier[0])
+            const d =
+              signed(divisor[3]) * 256 * 256 * 256 +
+              divisor[2] * 256 * 256 +
+              divisor[1] * 256 +
+              divisor[0]
+            const convert = (a) => {
+              return a.length === 2
+                ? (((signed(a[1]) ^ 0x80) * 256 + a[0]) * m) / d
+                : ((signed(a[2]) * 256 * 256 + a[1] * 256 + a[0]) * m) / d
+            }
+            return {
+              x: convert(x),
+              y: convert(y),
+              z: convert(z),
+            }
+          }
+          const printVector = (name, vector) => {
+            lines.push(
+              `${name}: (${[
+                `${vector.x.toFixed(3).padStart(10)}`,
+                `${vector.y.toFixed(3).padStart(10)}`,
+                `${vector.z.toFixed(3).padStart(10)}`,
+              ].join(", ")})`
+            )
+          }
+
+          const angular_multiplier = extractAndPrint("angular_multiplier", 2)
+          const angular_divisor = extractAndPrint("angular_divisor", 4)
+          const angular_velocity_x = extractAndPrint("angular_velocity_x", 3)
+          const angular_velocity_y = extractAndPrint("angular_velocity_y", 3)
+          const angular_velocity_z = extractAndPrint("angular_velocity_z", 3)
+          printVector(
+            "angular_velocity",
+            getVector(
+              angular_multiplier,
+              angular_divisor,
+              angular_velocity_x,
+              angular_velocity_y,
+              angular_velocity_z
+            )
+          )
+
+          const acceleration_multiplier = extractAndPrint(
+            "acceleration_multiplier",
+            2
+          )
+          const acceleration_divisor = extractAndPrint(
+            "acceleration_divisor",
+            4
+          )
+          const acceleration_x = extractAndPrint("acceleration_x", 3)
+          const acceleration_y = extractAndPrint("acceleration_y", 3)
+          const acceleration_z = extractAndPrint("acceleration_z", 3)
+          printVector(
+            "acceleration",
+            getVector(
+              acceleration_multiplier,
+              acceleration_divisor,
+              acceleration_x,
+              acceleration_y,
+              acceleration_z
+            )
+          )
+
+          const magnetic_multiplier = extractAndPrint("magnetic_multiplier", 2)
+          const magnetic_divisor = extractAndPrint("magnetic_divisor", 4)
+          const magnetic_x = extractAndPrint("magnetic_x", 2)
+          const magnetic_y = extractAndPrint("magnetic_y", 2)
+          const magnetic_z = extractAndPrint("magnetic_z", 2)
+          printVector(
+            "magnetic",
+            getVector(
+              magnetic_multiplier.slice().reverse(),
+              magnetic_divisor.slice().reverse(),
+              magnetic_x,
+              magnetic_y,
+              magnetic_z
+            )
+          )
+
+          setLatestReport(lines.join("\n"))
+
+          const accelVector = getVector(
+            acceleration_multiplier,
+            acceleration_divisor,
+            acceleration_x,
+            acceleration_y,
+            acceleration_z
+          )
+
+          console.log(accelVector)
+        })
+      }
+    </script>
+    <style>
+      #overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 480px;
+        height: 320px;
+        /* display: flex; */
+        /* justify-content: center;
+        align-items: center; */
+        //pointer-events: none; /* Allows clicks to pass through to the a-scene */
+      }
+
+      #overlay-content {
+        background-color: rgba(255, 255, 255, 0.8);
+        padding: 20px;
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <a-scene>
+      <a-box position="-1 0.5 -3" rotation="0 45 0" color="#4CC3D9"></a-box>
+      <a-sphere position="0 1.25 -5" radius="1.25" color="#EF2D5E"></a-sphere>
+      <a-cylinder
+        position="1 0.75 -3"
+        radius="0.5"
+        height="1.5"
+        color="#FFC65D"
+      ></a-cylinder>
+      <a-plane
+        position="0 0 -4"
+        rotation="-90 0 0"
+        width="4"
+        height="4"
+        color="#7BC8A4"
+      ></a-plane>
+      <a-sky color="#ECECEC"></a-sky>
+
+      <a-entity id="rig" position="0 1.6 0" rotation="-10 0 15">
+        <a-entity id="camera" camera look-controls wasd-controls></a-entity>
+        <!-- <a-entity camera="active: true" look-controls wasd-controls position="0 1.6 0" data-aframe-default-camera></a-entity> -->
+      </a-entity>
+    </a-scene>
+
+    <div id="overlay">
+      <div id="overlay-content">
+        <button onClick="requestNrealAccess()">Request Nreal Access</button>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx" onload="window.ready()"></script>
   </body>
 </html>
